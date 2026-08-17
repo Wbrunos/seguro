@@ -18,28 +18,36 @@ export function parseCSV(file) {
           .map((row) => {
             // Read keys ignoring casing and spaces
             const keys = Object.keys(row);
-            
-            // If the row is parsed as a single string due to delimiter mismatch, or has no keys, getVal will check
+            // Clean keys and find matches
+            const keysCleaned = keys.map(k => ({ original: k, clean: k.trim().toLowerCase() }));
+
             const getVal = (possibleKeys) => {
-              const foundKey = keys.find(k => {
-                const kClean = k.trim().toLowerCase();
-                return possibleKeys.some(pk => kClean.includes(pk) || pk.includes(kClean));
-              });
-              return foundKey ? row[foundKey] : '';
+              // Try exact match first
+              let match = keysCleaned.find(k => possibleKeys.includes(k.clean));
+              if (match) return row[match.original];
+              
+              // Fallback to substring match
+              match = keysCleaned.find(k => possibleKeys.some(pk => k.clean.includes(pk)));
+              return match ? row[match.original] : '';
             };
 
             // Map CPF / Matricula (Matr.)
-            let cpfVal = getVal(['cpf', 'matr.', 'matr', 'matricula', 'id']);
-            // Map Nome / Servidor
-            let nomeVal = getVal(['nome', 'servidor', 'funcionario']);
+            let cpfVal = getVal(['cpf', 'matr.', 'matr', 'matricula', 'id', 'matrícula']);
+            
+            // Map Nome / Servidor (Ensuring we don't accidentally match 'cargo' or 'matricula' as name)
+            let nomeVal = getVal(['servidor', 'nome', 'nome completo', 'funcionario', 'funcionário']);
+            
             // Map Valor
-            let valorVal = getVal(['valor']);
+            let valorVal = getVal(['valor', 'valor da venda', 'venda']);
+            
             // Map Cidade / Comarca / Setor
-            let cidadeVal = getVal(['cidade', 'comarca/setor/vara', 'comarca', 'setor', 'exercício']);
+            let cidadeVal = getVal(['comarca/setor/vara (exercício)', 'cidade', 'comarca', 'setor', 'vara', 'exercicio', 'exercício']);
+            
             // Map Telefone
-            let telefoneVal = getVal(['telefone', 'tel']);
+            let telefoneVal = getVal(['telefone', 'tel', 'celular', 'fone']);
+            
             // Map Orgao / Cargo Efetivo
-            let orgaoVal = getVal(['orgão', 'orgao', 'cargo efetivo', 'cargo']);
+            let orgaoVal = getVal(['cargo efetivo', 'cargo', 'função', 'funcao', 'orgão', 'orgao']);
 
             return {
               cpf: (cpfVal || '').trim(),

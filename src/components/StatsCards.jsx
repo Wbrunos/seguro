@@ -1,4 +1,4 @@
-export default function StatsCards({ leads, user }) {
+export default function StatsCards({ leads, user, activeStatus, onStatusClick }) {
   const total = leads.length;
 
   const counts = {
@@ -20,21 +20,41 @@ export default function StatsCards({ leads, user }) {
 
   const pct = (val) => (total > 0 ? ((val / total) * 100).toFixed(1) : 0);
 
+  const cardStyle = (statusKey) => ({
+    cursor: onStatusClick ? 'pointer' : 'default',
+    transform: activeStatus === statusKey ? 'scale(1.02)' : 'none',
+    boxShadow: activeStatus === statusKey ? '0 0 10px rgba(37, 99, 235, 0.2)' : 'none',
+    border: activeStatus === statusKey ? '2px solid var(--accent-primary)' : '1px solid var(--border-primary)',
+    transition: 'all var(--transition-base)'
+  });
+
   return (
     <div className="stats-grid">
-      <div className="stat-card total">
+      <div 
+        className={`stat-card total ${activeStatus === 'todos' ? 'active' : ''}`}
+        style={cardStyle('todos')}
+        onClick={() => onStatusClick?.('todos')}
+      >
         <span className="stat-label">Total de Leads</span>
         <span className="stat-value">{total}</span>
         <span className="stat-percent">Designados</span>
       </div>
 
-      <div className="stat-card pendente">
+      <div 
+        className={`stat-card pendente ${activeStatus === 'pendente' ? 'active' : ''}`}
+        style={cardStyle('pendente')}
+        onClick={() => onStatusClick?.('pendente')}
+      >
         <span className="stat-label">Pendentes</span>
         <span className="stat-value">{counts.pendente}</span>
         <span className="stat-percent">{pct(counts.pendente)}% do total</span>
       </div>
 
-      <div className="stat-card sucesso">
+      <div 
+        className={`stat-card sucesso ${activeStatus === 'bem_sucedida' ? 'active' : ''}`}
+        style={cardStyle('bem_sucedida')}
+        onClick={() => onStatusClick?.('bem_sucedida')}
+      >
         <span className="stat-label">Bem Sucedidos</span>
         <span className="stat-value">{counts.bem_sucedida}</span>
         <span className="stat-percent">{pct(counts.bem_sucedida)}% do total</span>
@@ -54,7 +74,11 @@ export default function StatsCards({ leads, user }) {
         </div>
       )}
 
-      <div className="stat-card sem-exito">
+      <div 
+        className={`stat-card sem-exito ${activeStatus === 'sem_exito' ? 'active' : ''}`}
+        style={cardStyle('sem_exito')}
+        onClick={() => onStatusClick?.('sem_exito')}
+      >
         <span className="stat-label">Sem Êxito</span>
         <span className="stat-value">{counts.sem_exito}</span>
         <span className="stat-percent">{pct(counts.sem_exito)}% do total</span>

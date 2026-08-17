@@ -13,6 +13,7 @@ export default function ManualLeadForm({ onLeadAdded }) {
   const [pctComissao, setPctComissao] = useState('10');
   const [dataLote, setDataLote] = useState(new Date().toISOString().split('T')[0]);
   const [loteName, setLoteName] = useState('Inserção Manual');
+  const [tipoLista, setTipoLista] = useState('BRADESCO');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -77,6 +78,7 @@ export default function ManualLeadForm({ onLeadAdded }) {
         data_lote: dataLote,
         pct_comissao: pct,
         valor_comissao: commVal,
+        tipo_lista: tipoLista,
       };
 
       const { error } = await supabase
@@ -168,6 +170,20 @@ export default function ManualLeadForm({ onLeadAdded }) {
       <div>
         <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Data Referência</label>
         <input type="date" className="search-input" style={{ padding: '6px 12px' }} value={dataLote} onChange={(e) => setDataLote(e.target.value)} />
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Tipo de Lista / Segmento</label>
+        <div className="status-select-wrapper">
+          <select className="status-select" style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }} value={tipoLista} onChange={(e) => setTipoLista(e.target.value)}>
+            <option value="BRADESCO">Bradesco</option>
+            <option value="SANTANDER">Santander</option>
+            <option value="TRIBUNAL">Tribunal</option>
+            <option value="UEPB">UEPB</option>
+            <option value="TJPB">TJPB</option>
+          </select>
+          <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-end', gridColumn: 'span 2' }}>

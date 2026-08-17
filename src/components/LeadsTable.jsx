@@ -2,11 +2,11 @@ import { useState, useMemo } from 'react';
 import StatusSelect from './StatusSelect';
 import { supabase, TABLE_NAME } from '../lib/supabase';
 
-export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
+export default function LeadsTable({ leads, onLeadUpdated, loading, user, statusFilter, onStatusFilterChange }) {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
   const [loteFilter, setLoteFilter] = useState('todos');
   const [operadorFilter, setOperadorFilter] = useState('todos');
+  const [tipoListaFilter, setTipoListaFilter] = useState('todos');
   const [sortColumn, setSortColumn] = useState('nome');
   const [sortDir, setSortDir] = useState('asc');
   const [updatingId, setUpdatingId] = useState(null);
@@ -14,6 +14,12 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
   // List unique batch names and dates
   const uniqueLotes = useMemo(() => {
     const list = leads.map(l => l.data_lote || l.lote_upload || '').filter(Boolean);
+    return ['todos', ...new Set(list)];
+  }, [leads]);
+
+  // List unique segment types
+  const uniqueTipoListas = useMemo(() => {
+    const list = leads.map(l => l.tipo_lista || 'BRADESCO').filter(Boolean);
     return ['todos', ...new Set(list)];
   }, [leads]);
 
@@ -27,6 +33,11 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
   // Filter + Search + Sort
   const filtered = useMemo(() => {
     let data = [...leads];
+
+    // Tipo Lista filter
+    if (tipoListaFilter !== 'todos') {
+      data = data.filter((l) => (l.tipo_lista || 'BRADESCO') === tipoListaFilter);
+    }
 
     // Lote / Data filter
     if (loteFilter !== 'todos') {
@@ -65,11 +76,14 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
     });
 
     return data;
-  }, [leads, statusFilter, loteFilter, operadorFilter, search, sortColumn, sortDir, user]);
+  }, [leads, statusFilter, loteFilter, operadorFilter, tipoListaFilter, search, sortColumn, sortDir, user]);
 
   // Counts per status based on filters (excluding status filter itself)
   const counts = useMemo(() => {
     let baseData = [...leads];
+    if (tipoListaFilter !== 'todos') {
+      baseData = baseData.filter((l) => (l.tipo_lista || 'BRADESCO') === tipoListaFilter);
+    }
     if (loteFilter !== 'todos') {
       baseData = baseData.filter((l) => (l.data_lote || l.lote_upload) === loteFilter);
     }
@@ -84,7 +98,7 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
       tentar_novamente: baseData.filter((l) => l.status_ligacao === 'tentar_novamente').length,
       sem_exito: baseData.filter((l) => l.status_ligacao === 'sem_exito').length,
     };
-  }, [leads, loteFilter, operadorFilter, user]);
+  }, [leads, loteFilter, operadorFilter, tipoListaFilter, user]);
 
   const handleSort = (col) => {
     if (sortColumn === col) {
@@ -253,6 +267,24 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
             <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
           </div>
 
+          {/* Tipo Lista filter dropdown */}
+          <div className="status-select-wrapper" style={{ width: 'auto', minWidth: '160px' }}>
+            <select
+              className="status-select"
+              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }}
+              value={tipoListaFilter}
+              onChange={(e) => setTipoListaFilter(e.target.value)}
+            >
+              <option value="todos">📁 Todos os Segmentos</option>
+              {uniqueTipoListas.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
+            </select>
+            <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
+          </div>
+
           {/* Delete entire batch button (Admin Master only) */}
           {user?.funcao === 'gerente' && user?.nome === 'admin' && loteFilter !== 'todos' && (
             <button
@@ -296,7 +328,7 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
             <button
               key={f.key}
               className={`filter-pill ${statusFilter === f.key ? 'active' : ''}`}
-              onClick={() => setStatusFilter(f.key)}
+              onClick={() => onStatusFilterChange?.(f.key)}
             >
               {f.label}
               <span className="pill-count">{counts[f.key]}</span>
@@ -325,6 +357,7 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
               <th>Comissão</th>
               <th>Telefone</th>
               <th>Planilha</th>
+              <th>Segmento</th>
               <th onClick={() => handleSort('status_ligacao')}>
                 Status <span className="sort-indicator">{sortIcon('status_ligacao')}</span>
               </th>
@@ -350,9 +383,69 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
 
               return (
                 <tr key={lead.id} style={rowStyle}>
-                  <td className="cell-name">{lead.nome}</td>
-                  <td data-label="CPF" className="cell-cpf">{lead.cpf}</td>
-                  <td data-label="Valor" className="cell-valor">{lead.valor || '—'}</td>
+                  <td className="cell-name">
+                    <input
+                      type="text"
+                      className="obs-input"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 'inherit', color: 'inherit', minWidth: '120px' }}
+                      defaultValue={lead.nome || ''}
+                      placeholder="Sem nome..."
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === lead.nome) return;
+                        await supabase.from(TABLE_NAME).update({ nome: val }).eq('id', lead.id);
+                        onLeadUpdated?.();
+                      }}
+                    />
+                  </td>
+                  <td data-label="CPF" className="cell-cpf">
+                    <input
+                      type="text"
+                      className="obs-input"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 'inherit', color: 'inherit', minWidth: '100px' }}
+                      defaultValue={lead.cpf || ''}
+                      placeholder="Sem CPF..."
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === lead.cpf) return;
+                        const { error } = await supabase.from(TABLE_NAME).update({ cpf: val }).eq('id', lead.id);
+                        if (error) alert('Erro ao salvar CPF (deve ser único): ' + error.message);
+                        onLeadUpdated?.();
+                      }}
+                    />
+                  </td>
+                  <td data-label="Valor" className="cell-valor">
+                    <input
+                      type="text"
+                      className="obs-input"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 'inherit', color: 'inherit', minWidth: '80px' }}
+                      defaultValue={lead.valor || ''}
+                      placeholder="Ex: R$ 0,00"
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === lead.valor) return;
+                        
+                        // Recalculate commissions dynamically on blur
+                        let numVal = 0;
+                        if (val) {
+                          let cleanVal = val.replace(/[^\d.,]/g, '');
+                          if (cleanVal.includes('.') && cleanVal.includes(',')) {
+                            cleanVal = cleanVal.replace(/\./g, '').replace(',', '.');
+                          } else if (cleanVal.includes(',')) {
+                            cleanVal = cleanVal.replace(',', '.');
+                          }
+                          numVal = parseFloat(cleanVal) || 0;
+                        }
+                        const commVal = numVal * ((lead.pct_comissao || 0) / 100);
+
+                        await supabase.from(TABLE_NAME).update({ 
+                          valor: val,
+                          valor_comissao: commVal 
+                        }).eq('id', lead.id);
+                        onLeadUpdated?.();
+                      }}
+                    />
+                  </td>
                 {user?.funcao === 'gerente' && (
                   <td data-label="Operador" style={{ fontWeight: '500' }}>
                     {lead.usuario_designado_nome || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Livre</span>}
@@ -366,22 +459,57 @@ export default function LeadsTable({ leads, onLeadUpdated, loading, user }) {
                   )}
                 </td>
                 <td data-label="Telefone" className="cell-telefone">
-                  {lead.telefone ? (
-                    <a
-                      href={getWhatsAppLink(lead.telefone)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Abrir no WhatsApp"
-                    >
-                      {formatPhone(lead.telefone)}
-                    </a>
-                  ) : (
-                    '—'
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="text"
+                      className="obs-input"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 'inherit', color: 'inherit', minWidth: '100px' }}
+                      defaultValue={lead.telefone || ''}
+                      placeholder="Sem telefone..."
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === lead.telefone) return;
+                        await supabase.from(TABLE_NAME).update({ telefone: val }).eq('id', lead.id);
+                        onLeadUpdated?.();
+                      }}
+                    />
+                    {lead.telefone && (
+                      <a
+                        href={getWhatsAppLink(lead.telefone)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Abrir no WhatsApp"
+                        style={{ fontSize: '0.9rem' }}
+                      >
+                        💬
+                      </a>
+                    )}
+                  </div>
                 </td>
                 <td data-label="Planilha" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   {lead.lote_upload || '—'}
                   <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>({formatDate(lead.data_lote)})</div>
+                </td>
+                <td data-label="Segmento">
+                  <div className="status-select-wrapper" style={{ minWidth: '100px' }}>
+                    <select
+                      className="status-select"
+                      style={{ background: 'transparent', border: 'none', padding: 0, fontWeight: 'inherit', color: 'inherit' }}
+                      value={lead.tipo_lista || 'BRADESCO'}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        await supabase.from(TABLE_NAME).update({ tipo_lista: val }).eq('id', lead.id);
+                        onLeadUpdated?.();
+                      }}
+                    >
+                      <option value="BRADESCO">Bradesco</option>
+                      <option value="SANTANDER">Santander</option>
+                      <option value="TRIBUNAL">Tribunal</option>
+                      <option value="UEPB">UEPB</option>
+                      <option value="TJPB">TJPB</option>
+                    </select>
+                    <span className="status-select-arrow" style={{ fontSize: '0.6rem' }}>▼</span>
+                  </div>
                 </td>
                 <td data-label="Status">
                   <StatusSelect

@@ -12,6 +12,7 @@ export default function FileUpload({ onUploadComplete }) {
   const [selectedOperador, setSelectedOperador] = useState('');
   const [dataLote, setDataLote] = useState(new Date().toISOString().split('T')[0]);
   const [pctComissao, setPctComissao] = useState('10');
+  const [selectedTipoLista, setSelectedTipoLista] = useState('BRADESCO');
   const fileInputRef = useRef(null);
 
   // Fetch operators list when preview is loaded
@@ -119,6 +120,7 @@ export default function FileUpload({ onUploadComplete }) {
             data_lote: dataLote,
             pct_comissao: pct,
             valor_comissao: commVal,
+            tipo_lista: selectedTipoLista,
           };
         });
 
@@ -158,7 +160,7 @@ export default function FileUpload({ onUploadComplete }) {
     } finally {
       setIsUploading(false);
     }
-  }, [preview, selectedOperador, dataLote, pctComissao, onUploadComplete]);
+  }, [preview, selectedOperador, dataLote, pctComissao, selectedTipoLista, onUploadComplete]);
 
   return (
     <div className="upload-section">
@@ -248,6 +250,27 @@ export default function FileUpload({ onUploadComplete }) {
                 value={pctComissao}
                 onChange={(e) => setPctComissao(e.target.value)}
               />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
+                Tipo de Lista / Segmento
+              </label>
+              <div className="status-select-wrapper">
+                <select
+                  className="status-select"
+                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }}
+                  value={selectedTipoLista}
+                  onChange={(e) => setSelectedTipoLista(e.target.value)}
+                >
+                  <option value="BRADESCO">Bradesco</option>
+                  <option value="SANTANDER">Santander</option>
+                  <option value="TRIBUNAL">Tribunal</option>
+                  <option value="UEPB">UEPB</option>
+                  <option value="TJPB">TJPB</option>
+                </select>
+                <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
+              </div>
             </div>
           </div>
 

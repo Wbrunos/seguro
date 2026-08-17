@@ -15,6 +15,7 @@ function App() {
   const [showUpload, setShowUpload] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [activeTab, setActiveTab] = useState('leads'); // leads | performance | users
+  const [statusFilter, setStatusFilter] = useState('todos');
 
   // Check saved session
   useEffect(() => {
@@ -214,7 +215,12 @@ function App() {
 
           {/* Stats */}
           {!loading && (
-            <StatsCards leads={leads} user={user} />
+            <StatsCards 
+              leads={leads} 
+              user={user} 
+              activeStatus={statusFilter} 
+              onStatusClick={setStatusFilter} 
+            />
           )}
 
           {/* Leads Table */}
@@ -236,6 +242,8 @@ function App() {
               onLeadUpdated={handleLeadUpdated}
               loading={loading}
               user={user}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
             />
           </section>
         </>

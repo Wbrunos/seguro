@@ -26,8 +26,8 @@ export function parseCSV(file) {
               let match = keysCleaned.find(k => possibleKeys.includes(k.clean));
               if (match) return row[match.original];
               
-              // Fallback to substring match
-              match = keysCleaned.find(k => possibleKeys.some(pk => k.clean.includes(pk)));
+              // Fallback to strict check: does the column header start with or match key
+              match = keysCleaned.find(k => possibleKeys.some(pk => k.clean.startsWith(pk) || k.clean === pk));
               return match ? row[match.original] : '';
             };
 

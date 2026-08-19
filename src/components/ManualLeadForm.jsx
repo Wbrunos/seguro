@@ -174,16 +174,14 @@ export default function ManualLeadForm({ onLeadAdded }) {
 
       <div>
         <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Tipo de Lista / Segmento</label>
-        <div className="status-select-wrapper">
-          <select className="status-select" style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }} value={tipoLista} onChange={(e) => setTipoLista(e.target.value)}>
-            <option value="BRADESCO">Bradesco</option>
-            <option value="SANTANDER">Santander</option>
-            <option value="TRIBUNAL">Tribunal</option>
-            <option value="UEPB">UEPB</option>
-            <option value="TJPB">TJPB</option>
-          </select>
-          <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
-        </div>
+        <input
+          type="text"
+          className="search-input"
+          style={{ padding: '6px 12px' }}
+          placeholder="Ex: TJPB, Geral, UEPB..."
+          value={tipoLista}
+          onChange={(e) => setTipoLista(e.target.value.toUpperCase())}
+        />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-end', gridColumn: 'span 2' }}>

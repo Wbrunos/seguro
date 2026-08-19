@@ -57,6 +57,34 @@
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+body.dark-mode {
+  --bg-primary: #0b0f19; /* Deeper premium dark background */
+  --bg-secondary: #111827; /* Very dark slate card body */
+  --bg-card: #111827;
+  --bg-glass: #1f2937; /* Dark slate tags */
+  --bg-glass-hover: #374151;
+  --bg-input: #1f2937;
+  --bg-table-row: #111827;
+  --bg-table-row-hover: #1f2937;
+
+  --border-primary: #1f2937; /* Soft dark border */
+  --border-accent: #374151;
+
+  --text-primary: #f9fafb; /* Off-white highly readable */
+  --text-secondary: #e5e7eb;
+  --text-muted: #9ca3af;
+
+  --accent-primary: #3b82f6; 
+  --accent-primary-hover: #60a5fa;
+  --accent-gradient: linear-gradient(135deg, #3b82f6, #60a5fa);
+  --accent-glow: rgba(59, 130, 246, 0.2);
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #0ea5e9;
+}
+
 /* ============================================================
    Reset & Base
    ============================================================ */
@@ -151,6 +179,7 @@ body::before {
 .app-header-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   width: 100%;
 }
@@ -158,7 +187,7 @@ body::before {
 @media (min-width: 768px) {
   .app-header-right {
     width: auto;
-    gap: var(--space-md);
+    gap: var(--space-sm);
   }
 }
 
@@ -194,22 +223,9 @@ body::before {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-sm);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-md);
   margin-bottom: var(--space-lg);
-}
-
-@media (min-width: 640px) {
-  .stats-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .stats-grid {
-    grid-template-columns: repeat(5, 1fr);
-    gap: var(--space-md);
-  }
 }
 
 .stat-card {
@@ -343,12 +359,33 @@ body::before {
   margin-bottom: var(--space-lg);
 }
 
-@media (min-width: 1024px) {
-  .table-controls {
+.table-controls-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .table-controls-top {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
   }
+}
+
+.table-controls-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+  width: 100%;
+}
+
+.filter-dropdown {
+  flex: 1;
+  min-width: 160px;
+  max-width: 260px;
 }
 
 .search-input-wrapper {
@@ -356,9 +393,9 @@ body::before {
   width: 100%;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .search-input-wrapper {
-    max-width: 380px;
+    max-width: 360px;
   }
 }
 
@@ -782,10 +819,76 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--border-accent);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--text-muted);
 }
+
+/* ============================================================
+   Responsive Scaling (Gold Rule - iPhone, Android, iPad)
+   ============================================================ */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+    text-align: center;
+  }
+  
+  .app-header-right {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .tabs-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .table-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+  }
+
+  .table-controls > div {
+    flex-direction: column !important;
+  }
+
+  .status-select-wrapper {
+    width: 100% !important;
+  }
+
+  /* Table styling for mobile - enable simple horizontal scroll wrapper */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    margin-bottom: var(--space-md);
+  }
+
+  .leads-table {
+    display: table;
+    min-width: 800px; /* Keep tabular representation scrollable on mobile */
+  }
+
+  .stats-cards-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-sm);
+  }
+
+  .card-stat {
+    padding: var(--space-md);
+  }
+
+  .obs-input {
+    font-size: 0.85rem !important;
+    padding: 6px !important;
+  }
+}
+

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase, USERS_TABLE } from '../lib/supabase';
+import { hashPassword, verifyPassword, sanitizeUserForStorage } from '../utils/security';
 
 export default function Login({ onLoginSuccess }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -22,10 +23,12 @@ export default function Login({ onLoginSuccess }) {
 
     try {
       if (isRegister) {
-        // Registra um novo usuário
+        // Hash password before storing
+        const hashedPwd = await hashPassword(senha.trim());
+        
         const { data, error: regError } = await supabase
           .from(USERS_TABLE)
-          .insert([{ nome: nome.trim(), senha: senha.trim(), funcao }])
+          .insert([{ nome: nome.trim(), senha: hashedPwd, funcao }])
           .select();
 
         if (regError) {
@@ -36,24 +39,53 @@ export default function Login({ onLoginSuccess }) {
         }
 
         if (data && data[0]) {
-          onLoginSuccess(data[0]);
+          // Store sanitized user (no password) in localStorage
+          onLoginSuccess(sanitizeUserForStorage(data[0]));
         }
       } else {
-        // Login básico
+        // Login: fetch user by name only
         const { data, error: loginError } = await supabase
           .from(USERS_TABLE)
           .select('*')
-          .eq('nome', nome.trim())
-          .eq('senha', senha.trim());
+          .eq('nome', nome.trim());
 
         if (loginError) throw loginError;
 
         if (data && data.length > 0) {
-          const loggedUser = data[0];
-          if (loggedUser.bloqueado) {
+          const dbUser = data[0];
+          
+          if (dbUser.bloqueado) {
             setError('Sua conta está bloqueada pelo administrador.');
+            setLoading(false);
+            return;
+          }
+
+          // Check if password is already hashed (64 hex chars = SHA-256)
+          const isHashed = /^[a-f0-9]{64}$/.test(dbUser.senha);
+          
+          let passwordMatch = false;
+          
+          if (isHashed) {
+            // Compare hashed passwords
+            passwordMatch = await verifyPassword(senha.trim(), dbUser.senha);
           } else {
-            onLoginSuccess(loggedUser);
+            // Legacy plain-text comparison (auto-migrate to hash)
+            passwordMatch = (dbUser.senha === senha.trim());
+            if (passwordMatch) {
+              // Auto-migrate: update to hashed password in database
+              const hashedPwd = await hashPassword(senha.trim());
+              await supabase
+                .from(USERS_TABLE)
+                .update({ senha: hashedPwd })
+                .eq('id', dbUser.id);
+            }
+          }
+          
+          if (passwordMatch) {
+            // Store sanitized user (no password in localStorage)
+            onLoginSuccess(sanitizeUserForStorage(dbUser));
+          } else {
+            setError('Usuário ou senha incorretos.');
           }
         } else {
           setError('Usuário ou senha incorretos.');

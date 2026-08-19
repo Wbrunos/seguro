@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLE_NAME } from './lib/supabase';
+import { sanitizeUserForStorage } from './utils/security';
 import FileUpload from './components/FileUpload';
 import LeadsTable from './components/LeadsTable';
 import StatsCards from './components/StatsCards';
@@ -19,14 +20,51 @@ function App() {
 
   // Check saved session
   useEffect(() => {
+    // Clean URL hash to prevent credential leakage in browser history
+    if (window.location.hash) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     const savedUser = localStorage.getItem('seguro_user');
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        // Remove any leaked password from old sessions
+        const safeUser = sanitizeUserForStorage(parsed);
+        setUser(safeUser);
+        // Re-save without password if it was there
+        if (parsed.senha) {
+          localStorage.setItem('seguro_user', JSON.stringify(safeUser));
+        }
       } catch (e) {
         localStorage.removeItem('seguro_user');
       }
     }
+
+    // Load status label configs
+    const fetchStatusConfigs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('seg_configuracoes')
+          .select('*')
+          .eq('chave', 'status_config')
+          .single();
+        if (!error && data) {
+          let parsed = data.valor;
+          if (typeof parsed === 'string') {
+            try {
+              parsed = JSON.parse(parsed);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+          localStorage.setItem('seguro_statuses_config', JSON.stringify(parsed));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchStatusConfigs();
   }, []);
 
   const addToast = (type, message) => {
@@ -37,10 +75,20 @@ function App() {
     }, 4000);
   };
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (isSilent = false) => {
     if (!user) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
+      
+      // Fetch latest profile config for logged user to avoid stale session cache
+      const { data: latestProfile } = await supabase
+        .from('seg_usuarios')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      const activeUser = latestProfile || user;
+
       const { data: usersData } = await supabase
         .from('seg_usuarios')
         .select('id, nome');
@@ -54,9 +102,20 @@ function App() {
 
       let query = supabase.from(TABLE_NAME).select('*');
       
-      // If user is operator, filter only designated ones
-      if (user.funcao === 'operador') {
-        query = query.eq('usuario_designado_id', user.id);
+      // Filter by permitted companies and/or assigned user for non-admin users
+      if (activeUser.nome !== 'admin') {
+        if (activeUser.funcao === 'operador') {
+          // Operador: show leads assigned to operator OR matching permitted companies
+          if (activeUser.empresas_permitidas && Array.isArray(activeUser.empresas_permitidas) && activeUser.empresas_permitidas.length > 0) {
+            const empConditions = activeUser.empresas_permitidas.map(e => `empresa.eq.${e}`).join(',');
+            query = query.or(`usuario_designado_id.eq.${activeUser.id},${empConditions}`);
+          }
+        } else if (activeUser.funcao === 'gerente') {
+          // Gerente: filter by permitted companies if configured
+          if (activeUser.empresas_permitidas && Array.isArray(activeUser.empresas_permitidas) && activeUser.empresas_permitidas.length > 0) {
+            query = query.in('empresa', activeUser.empresas_permitidas);
+          }
+        }
       }
 
       const { data, error } = await query.order('nome', { ascending: true });
@@ -74,7 +133,7 @@ function App() {
       console.error('Error fetching leads:', err);
       addToast('error', 'Erro ao carregar leads: ' + err.message);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [user]);
 
@@ -85,9 +144,10 @@ function App() {
   }, [user, fetchLeads]);
 
   const handleLoginSuccess = (userData) => {
-    setUser(userData);
-    localStorage.setItem('seguro_user', JSON.stringify(userData));
-    addToast('success', `Bem-vindo, ${userData.nome}!`);
+    const safeUser = sanitizeUserForStorage(userData);
+    setUser(safeUser);
+    localStorage.setItem('seguro_user', JSON.stringify(safeUser));
+    addToast('success', `Bem-vindo, ${safeUser.nome}!`);
   };
 
   const handleLogout = () => {
@@ -103,8 +163,23 @@ function App() {
   };
 
   const handleLeadUpdated = () => {
-    fetchLeads();
+    fetchLeads(true); // Silent refresh (prevents screen flashing)
   };
+
+  // Dark mode handler
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('seguro_theme') === 'dark';
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('seguro_theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('seguro_theme', 'light');
+    }
+  }, [darkMode]);
 
   if (!user) {
     return (
@@ -120,7 +195,7 @@ function App() {
       <header className="app-header">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <h1>Seguro Bradesco — Gestão de Ligações</h1>
+            <h1>Gestão de Ligações</h1>
             <span style={{ 
               fontSize: '0.7rem', 
               padding: '2px 8px', 
@@ -138,6 +213,16 @@ function App() {
           </p>
         </div>
         <div className="app-header-right">
+          {/* Theme switcher */}
+          <button
+            className="btn-ghost"
+            style={{ fontSize: '1rem', padding: '6px 12px' }}
+            onClick={() => setDarkMode(!darkMode)}
+            title={darkMode ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+          >
+            {darkMode ? '☀️ Modo Claro' : '🌙 Modo Escuro'}
+          </button>
+
           <button
             className="btn-ghost"
             onClick={fetchLeads}

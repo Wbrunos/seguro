@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, USERS_TABLE } from '../lib/supabase';
+import { hashPassword } from '../utils/security';
 
 export default function UserManagement({ currentUser }) {
   const [users, setUsers] = useState([]);
@@ -12,6 +13,7 @@ export default function UserManagement({ currentUser }) {
   const [nome, setNome] = useState('');
   const [senha, setSenha] = useState('');
   const [funcao, setFuncao] = useState('operador');
+  const [empresasPermitidas, setEmpresasPermitidas] = useState('');
 
   const isMaster = currentUser?.nome === 'admin';
 
@@ -44,9 +46,10 @@ export default function UserManagement({ currentUser }) {
     }
 
     try {
+      const hashedPwd = await hashPassword(newSenha.trim());
       const { error } = await supabase
         .from(USERS_TABLE)
-        .insert([{ nome: newNome.trim(), senha: newSenha.trim(), funcao: newFuncao }]);
+        .insert([{ nome: newNome.trim(), senha: hashedPwd, funcao: newFuncao, empresas_permitidas: null }]);
       
       if (error) {
         if (error.message.includes('unique')) {
@@ -110,8 +113,9 @@ export default function UserManagement({ currentUser }) {
     }
     setEditingUser(user);
     setNome(user.nome);
-    setSenha(user.senha);
+    setSenha('');
     setFuncao(user.funcao);
+    setEmpresasPermitidas(user.empresas_permitidas ? user.empresas_permitidas.join(', ') : '');
   };
 
   const handleSaveEdit = async (e) => {
@@ -120,9 +124,18 @@ export default function UserManagement({ currentUser }) {
     if (!nome.trim()) return;
 
     try {
-      const updateData = { nome: nome.trim(), funcao };
+      // Split text input by commas and clean
+      const arr = empresasPermitidas.split(',')
+        .map(x => x.trim().toUpperCase())
+        .filter(Boolean);
+
+      const updateData = { 
+        nome: nome.trim(), 
+        funcao,
+        empresas_permitidas: arr.length > 0 ? arr : null
+      };
       if (senha.trim()) {
-        updateData.senha = senha.trim();
+        updateData.senha = await hashPassword(senha.trim());
       }
 
       const { error } = await supabase
@@ -180,6 +193,13 @@ export default function UserManagement({ currentUser }) {
           <button type="submit" className="btn-primary" style={{ width: '100%', padding: '10px' }}>Criar Usuário</button>
         </form>
       )}
+
+      {isMaster && (
+        <>
+          <AdminColumnConfig />
+          <AdminStatusConfig />
+        </>
+      )}
       
       {editingUser && isMaster ? (
         <form onSubmit={handleSaveEdit} className="glass-card" style={{ maxWidth: '400px', marginBottom: 'var(--space-md)', padding: 'var(--space-md)' }}>
@@ -204,6 +224,19 @@ export default function UserManagement({ currentUser }) {
               </select>
               <span className="status-select-arrow">▼</span>
             </div>
+          </div>
+
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '4px' }}>Empresas Permitidas (deixe em branco para liberar todas)</label>
+            <input
+              type="text"
+              className="search-input"
+              style={{ padding: '6px 10px' }}
+              placeholder="Ex: BRADESCO, SANTANDER, TJPB"
+              value={empresasPermitidas}
+              onChange={(e) => setEmpresasPermitidas(e.target.value)}
+            />
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Separe por vírgulas para liberar mais de uma.</span>
           </div>
 
           <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
@@ -267,6 +300,223 @@ export default function UserManagement({ currentUser }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// Columns config helper subcomponent
+function AdminColumnConfig() {
+  const [cols, setCols] = useState({ operador: [], gerente: [] });
+  const [saving, setSaving] = useState(false);
+
+  const availableCols = [
+    { key: 'nome', label: 'Nome' },
+    { key: 'cpf', label: 'CPF / ID' },
+    { key: 'telefone', label: 'Telefone' },
+    { key: 'local', label: 'Local' },
+    { key: 'cargo', label: 'Cargo' },
+    { key: 'matricula', label: 'Matrícula' },
+    { key: 'empresa', label: 'Empresa' },
+    { key: 'planilha', label: 'Planilha' },
+    { key: 'segmento', label: 'Segmento' },
+    { key: 'valor', label: 'Valor' },
+    { key: 'comissao', label: 'Comissão' },
+    { key: 'comissao_receber', label: 'Comissão a Receber' },
+    { key: 'status', label: 'Status' },
+    { key: 'observacao', label: 'Observação' },
+  ];
+
+  const fetchConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seg_configuracoes')
+        .select('*')
+        .eq('chave', 'colunas_visiveis')
+        .single();
+      if (!error && data) {
+        let parsed = data.valor;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        setCols(parsed || { operador: [], gerente: [] });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfigs();
+  }, []);
+
+  const handleToggle = (role, key) => {
+    setCols(prev => {
+      const current = prev[role] || [];
+      const updated = current.includes(key)
+        ? current.filter(k => k !== key)
+        : [...current, key];
+      return { ...prev, [role]: updated };
+    });
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('seg_configuracoes')
+        .upsert({ chave: 'colunas_visiveis', valor: cols });
+      if (error) throw error;
+      alert('Visibilidade das colunas salva com sucesso!');
+    } catch (err) {
+      alert('Erro ao salvar colunas: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="glass-card" style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-md)', border: '1px solid var(--accent-primary)' }}>
+      <h4 style={{ fontSize: '0.9rem', marginBottom: 'var(--space-sm)' }}>👁️ Colunas Visíveis por Função</h4>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
+        Marque as colunas que cada função de usuário poderá visualizar no painel de leads.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+        <div>
+          <h5 style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '8px', color: 'var(--accent-primary-hover)' }}>Operadores</h5>
+          {availableCols.map(c => (
+            <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', padding: '4px 0', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={(cols.operador || []).includes(c.key)}
+                onChange={() => handleToggle('operador', c.key)}
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+        <div>
+          <h5 style={{ fontSize: '0.8rem', fontWeight: '600', marginBottom: '8px', color: 'var(--success)' }}>Gerentes</h5>
+          {availableCols.map(c => (
+            <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', padding: '4px 0', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={(cols.gerente || []).includes(c.key)}
+                onChange={() => handleToggle('gerente', c.key)}
+              />
+              {c.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <button className="btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '8px 16px' }}>
+        {saving ? 'Salvando...' : '💾 Salvar Configurações de Colunas'}
+      </button>
+    </div>
+  );
+}
+
+// Status labels custom configuration subcomponent
+export function AdminStatusConfig() {
+  const [statusMap, setStatusMap] = useState({
+    pendente: { label: '', color: '', bg: '' },
+    bem_sucedida: { label: '', color: '', bg: '' },
+    tentar_novamente: { label: '', color: '', bg: '' },
+    sem_exito: { label: '', color: '', bg: '' }
+  });
+  const [saving, setSaving] = useState(false);
+
+  const fetchConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seg_configuracoes')
+        .select('*')
+        .eq('chave', 'status_config')
+        .single();
+      if (!error && data) {
+        let parsed = data.valor;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        setStatusMap(parsed || {
+          pendente: { label: 'Pendente', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.18)' },
+          bem_sucedida: { label: 'Bem Sucedida', color: '#10b981', bg: 'rgba(16, 185, 129, 0.18)' },
+          tentar_novamente: { label: 'Ligar Novamente', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.18)' },
+          sem_exito: { label: 'Sem Êxito', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.18)' }
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfigs();
+  }, []);
+
+  const handleChange = (statusKey, newLabel) => {
+    setStatusMap(prev => ({
+      ...prev,
+      [statusKey]: {
+        ...prev[statusKey],
+        label: newLabel
+      }
+    }));
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('seg_configuracoes')
+        .upsert({ chave: 'status_config', valor: statusMap });
+      if (error) throw error;
+      localStorage.setItem('seguro_statuses_config', JSON.stringify(statusMap));
+      alert('Configuração de rótulos dos Status salva com sucesso! Recarregue a página para aplicar em todas as telas.');
+    } catch (err) {
+      alert('Erro ao salvar status: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="glass-card" style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-md)', border: '1px solid var(--accent-primary)' }}>
+      <h4 style={{ fontSize: '0.9rem', marginBottom: 'var(--space-sm)' }}>🏷️ Personalizar Rótulos dos Status</h4>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
+        Renomeie os rótulos das ligações para adaptá-los à sua operação comercial.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+        {['pendente', 'bem_sucedida', 'tentar_novamente', 'sem_exito'].map((key) => (
+          <div key={key}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', marginBottom: '4px', textTransform: 'uppercase' }}>
+              Status Original: {key.replace('_', ' ')}
+            </label>
+            <input
+              type="text"
+              className="search-input"
+              style={{ padding: '6px 10px' }}
+              value={statusMap[key]?.label || ''}
+              onChange={(e) => handleChange(key, e.target.value)}
+              placeholder="Digite o novo rótulo..."
+            />
+          </div>
+        ))}
+      </div>
+
+      <button className="btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '8px 16px' }}>
+        {saving ? 'Salvando...' : '💾 Salvar Nomes dos Status'}
+      </button>
     </div>
   );
 }

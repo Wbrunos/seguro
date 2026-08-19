@@ -25,9 +25,6 @@ export default function FileUpload({ onUploadComplete }) {
         .order('nome', { ascending: true });
       if (error) throw error;
       setOperadores(data || []);
-      if (data && data.length > 0) {
-        setSelectedOperador(data[0].id);
-      }
     } catch (err) {
       console.error('Error fetching operators:', err);
     }
@@ -98,28 +95,37 @@ export default function FileUpload({ onUploadComplete }) {
           // Clean value to numeric for commission calculations (e.g. "R$ 5.012,14" -> 5012.14)
           let numVal = 0;
           if (row.valor) {
-            // Keep only digits, dots, and commas
             let cleanVal = row.valor.replace(/[^\d.,]/g, '');
-            // If it has both a dot and a comma, it's Brazilian format (e.g., 5.012,14) -> remove dot, replace comma
             if (cleanVal.includes('.') && cleanVal.includes(',')) {
               cleanVal = cleanVal.replace(/\./g, '').replace(',', '.');
             } else if (cleanVal.includes(',')) {
-              // If it only has a comma (e.g. 250,00) -> replace with dot
               cleanVal = cleanVal.replace(',', '.');
             }
             numVal = parseFloat(cleanVal) || 0;
           }
 
-          const pct = parseFloat(pctComissao) || 0;
+          // Use row specific commission pct if parsed from CSV, else use user input default
+          const pct = row.pct_comissao !== undefined && row.pct_comissao !== null ? row.pct_comissao : (parseFloat(pctComissao) || 0);
           const commVal = numVal * (pct / 100);
 
           return {
-            ...row,
+            nome: row.nome,
+            cpf: row.cpf,
+            telefone: row.telefone,
+            local: row.local,
+            cargo: row.cargo,
+            matricula: row.matricula,
+            empresa: row.empresa,
+            valor: row.valor,
+            pct_comissao: pct,
+            valor_comissao: commVal,
+            valor_comissao_receber: row.valor_comissao_receber !== undefined && row.valor_comissao_receber !== null ? row.valor_comissao_receber : null,
+            status_original: row.status_original,
+            status_ligacao: 'pendente',
+            observacao: row.observacao,
             lote_upload: loteName,
             usuario_designado_id: selectedOperador || null,
             data_lote: dataLote,
-            pct_comissao: pct,
-            valor_comissao: commVal,
             tipo_lista: selectedTipoLista,
           };
         });
@@ -256,21 +262,14 @@ export default function FileUpload({ onUploadComplete }) {
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>
                 Tipo de Lista / Segmento
               </label>
-              <div className="status-select-wrapper">
-                <select
-                  className="status-select"
-                  style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }}
-                  value={selectedTipoLista}
-                  onChange={(e) => setSelectedTipoLista(e.target.value)}
-                >
-                  <option value="BRADESCO">Bradesco</option>
-                  <option value="SANTANDER">Santander</option>
-                  <option value="TRIBUNAL">Tribunal</option>
-                  <option value="UEPB">UEPB</option>
-                  <option value="TJPB">TJPB</option>
-                </select>
-                <span className="status-select-arrow" style={{ color: 'var(--text-muted)' }}>▼</span>
-              </div>
+              <input
+                type="text"
+                className="search-input"
+                style={{ padding: '6px 12px' }}
+                placeholder="Ex: TJPB, Geral, UEPB..."
+                value={selectedTipoLista}
+                onChange={(e) => setSelectedTipoLista(e.target.value.toUpperCase())}
+              />
             </div>
           </div>
 
@@ -304,26 +303,30 @@ export default function FileUpload({ onUploadComplete }) {
             <table className="leads-table" style={{ fontSize: '0.8rem' }}>
               <thead>
                 <tr>
-                  <th>CPF</th>
                   <th>Nome</th>
+                  <th>CPF</th>
                   <th>Valor</th>
-                  <th>Cidade</th>
+                  <th>Local</th>
                   <th>Telefone</th>
+                  <th>Matrícula</th>
+                  <th>Empresa</th>
                 </tr>
               </thead>
               <tbody>
                 {preview.data.slice(0, 5).map((row, i) => (
                   <tr key={i}>
-                    <td className="cell-cpf">{row.cpf}</td>
                     <td className="cell-name">{row.nome}</td>
+                    <td className="cell-cpf">{row.cpf}</td>
                     <td className="cell-valor">{row.valor}</td>
-                    <td>{row.cidade}</td>
+                    <td>{row.local || '—'}</td>
                     <td className="cell-telefone">{row.telefone}</td>
+                    <td>{row.matricula || '—'}</td>
+                    <td>{row.empresa || '—'}</td>
                   </tr>
                 ))}
                 {preview.data.length > 5 && (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                       ... e mais {preview.data.length - 5} leads
                     </td>
                   </tr>
